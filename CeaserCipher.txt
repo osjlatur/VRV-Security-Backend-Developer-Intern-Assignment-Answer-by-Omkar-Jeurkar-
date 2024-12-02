@@ -1,0 +1,94 @@
+package Algorithm;
+
+import java.util.Scanner;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
+/**
+ *
+ * @author java4
+ */
+public class CaesarCipher {
+    public static final String ALPHABET = "abcdefghijklmnopqrstuvwxyz ";
+ 
+    // Method to encrypt the filename
+    public static String encrypt(String filename, int shiftKey) {
+        filename = filename.toLowerCase();
+        String cipherText = "";
+        for (int i = 0; i < filename.length(); i++) {
+            int charPosition = ALPHABET.indexOf(filename.charAt(i));
+            int keyVal = (shiftKey + charPosition) % 27;
+            char replaceVal = ALPHABET.charAt(keyVal);
+            cipherText += replaceVal;
+        }
+        return cipherText;
+    }
+ 
+    // Method to decrypt the filename
+    public static String decrypt(String filename, int shiftKey) {
+        filename = filename.toLowerCase();
+        String plainText = "";
+        for (int i = 0; i < filename.length(); i++) {
+            int charPosition = ALPHABET.indexOf(filename.charAt(i));
+            int keyVal = (charPosition - shiftKey) % 27;
+            if (keyVal < 0) {
+                keyVal = ALPHABET.length() + keyVal;
+            }
+            char replaceVal = ALPHABET.charAt(keyVal);
+            plainText += replaceVal;
+        }
+        return plainText;
+    }
+ 
+    // Method to generate checksum for data integrity
+    public static String generateChecksum(String data) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(data.getBytes());
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        System.out.println("Enter the String for Encryption: ");
+        String message = sc.nextLine();
+        
+        // Encrypt the message
+        String encryptedMessage = encrypt(message, 3);
+        System.out.println("Encrypted: " + encryptedMessage);
+        
+        // Generate checksum for the original message
+        String checksum = generateChecksum(message);
+        System.out.println("Checksum: " + checksum);
+        
+        // Decrypt the message
+        String decryptedMessage = decrypt(encryptedMessage, 3);
+        System.out.println("Decrypted: " + decryptedMessage);
+        
+        // Generate checksum for the decrypted message to verify integrity
+        String decryptedChecksum = generateChecksum(decryptedMessage);
+        System.out.println("Decrypted Checksum: " + decryptedChecksum);
+        
+        // Check for data integrity
+        if (checksum.equals(decryptedChecksum)) {
+            System.out.println("Data integrity verified.");
+        } else {
+            System.out.println("Data integrity compromised!");
+        }
+        
+        sc.close();
+    }
+
+    public Object encrypt(String name) {
+        throw new UnsupportedOperationException("Not yet implemented");
+    }
+}

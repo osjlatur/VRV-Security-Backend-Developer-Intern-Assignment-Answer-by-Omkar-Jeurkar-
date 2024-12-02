@@ -1,0 +1,44 @@
+package DataBaseCon;
+
+import java.sql.Connection;
+import java.sql.DriverManager; // Added import
+import java.sql.SQLException;
+
+/**
+ *
+ * @author java4
+ */
+public class DbConnection {
+    private static final String URL = "jdbc:mysql://localhost:3306/multi_user";
+    private static final String USERNAME = "root";
+    private static final String PASSWORD = "root";
+
+    public static Connection getConnection() {
+        Connection con = null;
+        try {
+            Class.forName("com.mysql.jdbc.Driver");
+            con = DriverManager.getConnection(URL, USERNAME, PASSWORD);
+
+            // Implementing fine-grained access control
+            String userRole = getUserRole(); // Method to get the role of the user
+            if (!isAuthorized(userRole)) { // Check if user is authorized
+                throw new SecurityException("User does not have the required permissions.");
+            }
+        } catch (ClassNotFoundException e) {
+            System.err.println("JDBC Driver not found: " + e.getMessage());
+        } catch (SQLException e) {
+            System.err.println("Connection to database failed: " + e.getMessage());
+        }
+        return con;
+    }
+
+    private static String getUserRole() {
+        // Logic to determine the user's role
+        return "user"; // Placeholder value; implement actual role retrieval
+    }
+
+    private static boolean isAuthorized(String role) {
+        // Define authorization logic based on user roles
+        return role.equals("admin"); // Placeholder; implement actual authorization logic
+    }
+}
