@@ -1,0 +1,93 @@
+/*
+ * To change this template, choose Tools | Templates
+ * and open the template in the editor.
+ */
+package Network;
+
+import java.io.BufferedOutputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import javax.swing.JOptionPane; // For user notifications
+import DataBaseCon.DbConnection; // Assuming you have a database connection class
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+
+/**
+ *
+ * @author java4
+ */
+public class SplitFile {
+
+    public void split(String FilePath, String username) throws IOException {
+        RandomAccessFile raf = new RandomAccessFile(FilePath, "r");
+        long numSplits = 3; // from user input, extract it from args
+        long sourceSize = raf.length();
+        long bytesPerSplit = sourceSize / numSplits;
+        long remainingBytes = sourceSize % numSplits;
+        int maxReadBufferSize = 1024; // 1KB
+
+        for (int destIx = 1; destIx <= numSplits; destIx++) {
+            BufferedOutputStream bw = new BufferedOutputStream(new FileOutputStream(FilePath + destIx));
+            if (bytesPerSplit > maxReadBufferSize) {
+                long numReads = bytesPerSplit / maxReadBufferSize;
+                long numRemainingRead = bytesPerSplit % maxReadBufferSize;
+                for (int i = 0; i < numReads; i++) {
+                    readWrite(raf, bw, maxReadBufferSize);
+                }
+                if (numRemainingRead > 0) {
+                    readWrite(raf, bw, numRemainingRead);
+                }
+            } else {
+                readWrite(raf, bw, bytesPerSplit);
+            }
+            bw.close();
+        }
+
+        // Check for plagiarism after splitting
+        checkPlagiarismAndNotify(FilePath, username);
+
+        raf.close();
+    }
+
+    static void readWrite(RandomAccessFile raf, BufferedOutputStream bw, long numBytes) throws IOException {
+        byte[] buf = new byte[(int) numBytes];
+        int val = raf.read(buf);
+        if (val != -1) {
+            bw.write(buf);
+        }
+    }
+
+    private void checkPlagiarismAndNotify(String filePath, String username) {
+        // Pseudo-code to check for plagiarism and notify users/admin
+        double similarityPercentage = checkPlagiarism(filePath); // Implement this method to return plagiarism percentage
+
+        if (similarityPercentage >= 75 && similarityPercentage < 80) {
+            JOptionPane.showMessageDialog(null, "Your content is 75% similar to previously uploaded content.", "Plagiarism Alert", JOptionPane.WARNING_MESSAGE);
+        } else if (similarityPercentage >= 80) {
+            JOptionPane.showMessageDialog(null, "Content exceeds 80% similarity. Admin approval required.", "Plagiarism Alert", JOptionPane.WARNING_MESSAGE);
+            // Store request in the database for admin review
+            storeRequestForAdminApproval(filePath, username);
+        }
+    }
+
+    private void storeRequestForAdminApproval(String filename, String username) {
+        try (Connection con = DbConnection.getConnection()) {
+            String sql = "INSERT INTO plagiarism_requests (filename, username, status) VALUES (?, ?, 'pending')";
+            PreparedStatement pstmt = con.prepareStatement(sql);
+            pstmt.setString(1, filename);
+            pstmt.setString(2, username);
+            pstmt.executeUpdate();
+            System.out.println("Plagiarism request stored for admin approval.");
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private double checkPlagiarism(String filePath) {
+        // Implement plagiarism checking logic
+        // Return the similarity percentage
+        return 0; // Placeholder value
+    }
+}

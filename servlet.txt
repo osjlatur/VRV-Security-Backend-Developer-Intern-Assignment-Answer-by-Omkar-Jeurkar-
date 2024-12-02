@@ -1,0 +1,218 @@
+package Network;
+
+import Algorithm.CaesarCipher;
+import DataBaseCon.DbConnection;
+import DataBaseCon.Ftpcon;
+import com.oreilly.servlet.MultipartRequest;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.InputStream;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.security.MessageDigest;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+import javax.crypto.Cipher;
+import javax.crypto.spec.SecretKeySpec;
+
+public class NewServlet extends HttpServlet {
+
+    File file;
+    final String filepath = "D:/";
+    private static final String SECRET_KEY = "mySuperSecretKey"; // Example key for AES encryption
+
+    protected void processRequest(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        response.setContentType("text/html;charset=UTF-8");
+        PrintWriter out = response.getWriter();
+        try {
+            HttpSession user = request.getSession(true);
+            String username = (String) user.getAttribute("username"); // Ensure that the user is authenticated
+            if (username == null) {
+                response.sendRedirect("login.jsp"); // Redirect to login if not authenticated
+                return;
+            }
+
+            // Check user role for access control
+            String userRole = (String) user.getAttribute("userRole");
+            if (!"admin".equals(userRole)) { // Replace with actual role check
+                out.println("You do not have permission to upload files.");
+                return;
+            }
+
+            String fname = (String) user.getAttribute("filenames");
+            String fpath = (String) user.getAttribute("filepathh");
+            String f1, f2, f3;
+            f1 = fpath + "/" + fname;
+            f2 = fpath + "\\" + fname + "2";
+            f3 = fpath + "\\" + fname + "3";
+            System.out.println("--------->>" + f1);
+
+            System.out.println("Welcome File Upload");
+            MultipartRequest m = new MultipartRequest(request, filepath);
+            String mac1 = m.getParameter("mac1");
+            String mac2 = m.getParameter("mac2");
+            String mac3 = m.getParameter("mac3");
+            String block1 = m.getParameter("block1");
+            String block2 = m.getParameter("block2");
+            String block3 = m.getParameter("block3");
+            String plain = (String) user.getAttribute("CipherText");
+
+            // Encrypt the file content
+            String CaesarCipher = new CaesarCipher().encrypt(plain.toString(), 1);
+            String encryptedFileContent = encrypt(CaesarCipher);
+
+            // Calculate checksum for integrity verification
+            String checksum = calculateChecksum(encryptedFileContent);
+
+            FileWriter fw = new FileWriter(f1);
+            fw.write(encryptedFileContent);
+            fw.close();
+
+            // Implement plagiarism detection (simplified logic)
+            boolean isPlagiarized = checkPlagiarism(encryptedFileContent);
+            if (isPlagiarized) {
+                out.println("Plagiarism detected! Please revise your content.");
+                return;
+            }
+
+            boolean status = new Ftpcon().upload(new File(f1));
+            System.out.println("Status----->" + status);
+            if (status) {
+                String users = user.getAttribute("sssname").toString();
+
+                DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+                Date date = new Date();
+                String time = dateFormat.format(date);
+
+                PreparedStatement pstm1 = null;
+                PreparedStatement pstm2 = null;
+                Connection con = DbConnection.getConnection();
+
+                String sq2 = "insert into file_storage (filename, file, block1, block2, block3, username, up_time, mac1, mac2, mac3, checksum) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                pstm1 = con.prepareStatement(sq2);
+                pstm1.setString(1, fname);
+                pstm1.setString(2, encryptedFileContent); // Store encrypted content
+                pstm1.setString(3, block1);
+                pstm1.setString(4, block2);
+                pstm1.setString(5, block3);
+                pstm1.setString(6, users);
+                pstm1.setString(7, time);
+                pstm1.setString(8, mac1);
+                pstm1.setString(9, mac2);
+                pstm1.setString(10, mac3);
+                pstm1.setString(11, checksum); // Store checksum
+
+                boolean sd = pstm1.execute();
+                System.out.println(sd);
+                try {
+                    String sql3 = "insert into file_view (file_name, username, mac1, mac2, mac3, time, file, status, file_status) values (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    pstm2 = con.prepareStatement(sql3);
+                    pstm2.setString(1, fname);
+                    pstm2.setString(2, users);
+                    pstm2.setString(3, mac1);
+                    pstm2.setString(4, mac2);
+                    pstm2.setString(5, mac3);
+                    pstm2.setString(6, time);
+                    pstm2.setString(7, encryptedFileContent);
+                    pstm2.setString(8, "Yes");
+                    pstm2.setString(9, "Original File");
+                    boolean sdd = pstm2.execute();
+                    System.out.println(sdd);
+                    if (!sdd) {
+                        response.sendRedirect("upload.jsp?msg=File_upload_to_cloud");
+                    } else {
+                        response.sendRedirect("upload.jsp?msg=File_upload_to_cloud");
+                    }
+                } catch (SQLException ex) {
+                    ex.printStackTrace();
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    // AES Encryption method
+    private String encrypt(String data) throws Exception {
+        SecretKeySpec secretKey = new SecretKeySpec(SECRET_KEY.getBytes(), "AES");
+        Cipher cipher = Cipher.getInstance("AES");
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey);
+        byte[] encryptedData = cipher.doFinal(data.getBytes());
+        return new String(encryptedData);
+    }
+
+    // Method to calculate checksum
+    private String calculateChecksum(String data) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        byte[] hash = digest.digest(data.getBytes());
+        StringBuilder hexString = new StringBuilder();
+        for (byte b : hash) {
+            String hex = Integer.toHexString(0xff & b);
+            if (hex.length() == 1) hexString.append('0');
+            hexString.append(hex);
+        }
+        return hexString.toString();
+    }
+
+    // Method to check for plagiarism (dummy logic)
+    private boolean checkPlagiarism(String content) {
+        // Implement your actual plagiarism detection logic here
+        return false; // Return true if plagiarism is detected
+    }
+
+    public void split(String FilePath, long splitlen) {
+        long leninfile = 0, leng = 0;
+        int count = 1, data;
+        try {
+            File filename = new File(FilePath);
+            InputStream infile = new BufferedInputStream(new FileInputStream(filename));
+            data = infile.read();
+            while (data != -1) {
+                filename = new File(FilePath + count + ".sp");
+                OutputStream outfile = new BufferedOutputStream(new FileOutputStream(filename));
+                while (data != -1 && leng < splitlen) {
+                    outfile.write(data);
+                    leng++;
+                    data = infile.read();
+                }
+                leninfile += leng;
+                leng = 0;
+                outfile.close();
+                count++;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        processRequest(request, response);
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        processRequest(request, response);
+    }
+
+    @Override
+    public String getServletInfo() {
+        return "Short description";
+    }
+}

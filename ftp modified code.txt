@@ -1,0 +1,97 @@
+package DataBaseCon;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import org.apache.commons.net.ftp.FTPClient;
+import javax.swing.JOptionPane;  // For user notifications
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import DataBaseCon.DbConnection; // Assuming you have a database connection class
+
+/**
+ *
+ * @author java4
+ */
+public class Ftpcon {
+
+    FTPClient client = new FTPClient();
+    FileInputStream fis = null;
+    boolean status;
+
+    public boolean upload(File file, String username) {
+        try {
+            client.connect("ftp.drivehq.com");
+            client.login("USERNAME", "PASSWORD");
+            client.enterLocalPassiveMode();
+
+            // Removed file size check for upload (previously lines 12-16)
+            /*
+            if (file.length() > 10 * 1024 * 1024) { // Limiting file size to 10MB
+                JOptionPane.showMessageDialog(null, "File size exceeds the limit of 10MB.", "Upload Failed", JOptionPane.ERROR_MESSAGE);
+                return false;
+            }
+            */
+
+            fis = new FileInputStream(file);
+            status = client.storeFile("/" + file.getName(), fis);
+            client.logout();
+            fis.close();
+
+            // Notify user and admin based on plagiarism detection (pseudo-code)
+            checkPlagiarismAndNotify(file, username);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(null, "Error during upload: " + e.getMessage(), "Upload Failed", JOptionPane.ERROR_MESSAGE);
+            return false;
+        } finally {
+            try {
+                if (fis != null) fis.close();
+                client.disconnect();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        if (status) {
+            System.out.println("Upload success");
+            return true;
+        } else {
+            System.out.println("Upload failed");
+            return false;
+        }
+    }
+
+    private void checkPlagiarismAndNotify(File file, String username) {
+        // Pseudo-code to check for plagiarism and notify users/admin
+        double similarityPercentage = checkPlagiarism(file); // Implement this method to return plagiarism percentage
+
+        if (similarityPercentage >= 75 && similarityPercentage < 80) {
+            JOptionPane.showMessageDialog(null, "Your content is 75% similar to previously uploaded content.", "Plagiarism Alert", JOptionPane.WARNING_MESSAGE);
+        } else if (similarityPercentage >= 80) {
+            JOptionPane.showMessageDialog(null, "Content exceeds 80% similarity. Admin approval required.", "Plagiarism Alert", JOptionPane.WARNING_MESSAGE);
+            // Store request in the database for admin review
+            storeRequestForAdminApproval(file.getName(), username);
+        }
+    }
+
+    private void storeRequestForAdminApproval(String filename, String username) {
+        try (Connection con = DbConnection.getConnection()) {
+            String sql = "INSERT INTO plagiarism_requests (filename, username, status) VALUES (?, ?, 'pending')";
+            PreparedStatement pstmt = con.prepareStatement(sql);
+            pstmt.setString(1, filename);
+            pstmt.setString(2, username);
+            pstmt.executeUpdate();
+            System.out.println("Plagiarism request stored for admin approval.");
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private double checkPlagiarism(File file) {
+        // Implement plagiarism checking logic
+        // Return the similarity percentage
+        return 0; // Placeholder value
+    }
+}
